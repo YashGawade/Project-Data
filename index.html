@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Music Player Pro</title>
+
+<style>
+body {
+  font-family: "Segoe UI", sans-serif;
+  background: #f4f7fb;
+  margin: 0;
+  padding: 0;
+}
+header {
+  background: linear-gradient(135deg, #182848, #4b6cb7);
+  color: white;
+  text-align: center;
+  padding: 25px 0;
+  font-size: 32px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+.container {
+  max-width: 900px;
+  margin: 30px auto;
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+.section-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  color: #222;
+}
+input {
+  padding: 10px;
+  font-size: 15px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  width: 250px;
+  margin-right: 10px;
+}
+button {
+  padding: 10px 18px;
+  font-size: 14px;
+  background: #4b6cb7;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+button:hover {
+  background: #3553a4;
+}
+.playlist-box, .player-box {
+  margin-top: 25px;
+  padding: 20px;
+  border-radius: 10px;
+  background: #f0f4ff;
+  border-left: 5px solid #4b6cb7;
+}
+ul, ol {
+  padding-left: 20px;
+}
+li {
+  margin: 8px 0;
+  font-size: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.song-btns button {
+  margin-left: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.current-song {
+  font-size: 20px;
+  margin-bottom: 10px;
+  color: #222;
+}
+</style>
+
+</head>
+
+<body>
+<header>🎵 Music Player Pro</header>
+
+<div class="container">
+  <div class="section-title">Create Playlist</div>
+  <input id="newPlaylistName" placeholder="Enter playlist name" />
+  <button id="createPlaylist">Create</button>
+
+  <div class="playlist-box">
+    <div class="section-title">Your Playlists</div>
+    <ul id="playlists"></ul>
+  </div>
+
+  <div class="player-box" id="playerPanel" style="display: none">
+    <div class="section-title" id="plName"></div>
+    <div class="current-song">
+      Now Playing: <span id="currentSong">None</span>
+    </div>
+
+    <button id="playBtn">Play</button>
+    <button id="prevBtn">⟵ Previous</button>
+    <button id="nextBtn">Next ⟶</button>
+
+    <hr style="margin: 20px 0" />
+
+    <input id="newSongName" placeholder="Add new song" />
+    <button id="addSongBtn">Add Song</button>
+
+    <h3 style="margin-top: 20px">Songs</h3>
+    <ol id="songList"></ol>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost:4000";
+let selectedPlaylistId = null;
+
+async function fetchPlaylists() {
+  const r = await fetch(API + "/playlists");
+  const data = await r.json();
+  const ul = document.getElementById("playlists");
+  ul.innerHTML = "";
+
+  data.forEach((p) => {
+    const li = document.createElement("li");
+    li.textContent = p.name + " (" + p.songs.length + " songs)";
+    const btn = document.createElement("button");
+    btn.textContent = "Open";
+    btn.onclick = () => openPlaylist(p.id);
+    li.appendChild(btn);
+    ul.appendChild(li);
+  });
+}
+
+async function createPlaylist() {
+  const name = document.getElementById("newPlaylistName").value.trim();
+  if (!name) return alert("Enter name");
+
+  await fetch(API + "/playlists", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+
+  document.getElementById("newPlaylistName").value = "";
+  fetchPlaylists();
+}
+
+async function openPlaylist(id) {
+  selectedPlaylistId = id;
+
+  const r = await fetch(API + "/playlists/" + id);
+  const p = await r.json();
+
+  document.getElementById("playerPanel").style.display = "block";
+  document.getElementById("plName").textContent = p.name;
+
+  document.getElementById("currentSong").textContent =
+    (p.current ? p.songs.find((s) => s.id === p.current)?.name : "-") || "-";
+
+  const ol = document.getElementById("songList");
+  ol.innerHTML = "";
+
+  p.songs.forEach((s) => {
+    const li = document.createElement("li");
+    li.textContent = s.name;
+
+    const btns = document.createElement("div");
+    btns.className = "song-btns";
+
+    const del = document.createElement("button");
+    del.textContent = "Delete";
+    del.onclick = async () => {
+      await fetch(`${API}/playlists/${id}/songs/${s.id}`, { method: "DELETE" });
+      openPlaylist(id);
+    };
+
+    btns.appendChild(del);
+    li.appendChild(btns);
+    ol.appendChild(li);
+  });
+}
+
+async function addSong() {
+  const name = document.getElementById("newSongName").value.trim();
+  if (!name) return alert("Enter song name");
+
+  await fetch(`${API}/playlists/${selectedPlaylistId}/songs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+
+  document.getElementById("newSongName").value = "";
+  openPlaylist(selectedPlaylistId);
+}
+
+async function doPlay() {
+  const r = await fetch(`${API}/playlists/${selectedPlaylistId}/play`, {
+    method: "POST",
+  });
+
+  const j = await r.json();
+  document.getElementById("currentSong").textContent =
+    j.playing ? j.playing.name : "-";
+}
+
+async function doNext() {
+  const r = await fetch(`${API}/playlists/${selectedPlaylistId}/next`, {
+    method: "POST",
+  });
+
+  const j = await r.json();
+  document.getElementById("currentSong").textContent =
+    j.movedTo ? j.movedTo.name : "-";
+}
+
+async function doPrev() {
+  const r = await fetch(`${API}/playlists/${selectedPlaylistId}/previous`, {
+    method: "POST",
+  });
+
+  const j = await r.json();
+  document.getElementById("currentSong").textContent =
+    j.movedTo ? j.movedTo.name : "-";
+}
+
+document.getElementById("createPlaylist").onclick = createPlaylist;
+document.getElementById("addSongBtn").onclick = addSong;
+document.getElementById("playBtn").onclick = doPlay;
+document.getElementById("nextBtn").onclick = doNext;
+document.getElementById("prevBtn").onclick = doPrev;
+
+fetchPlaylists();
+</script>
+
+</body>
+</html>
